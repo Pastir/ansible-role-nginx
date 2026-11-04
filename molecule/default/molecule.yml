@@ -1,0 +1,42 @@
+---
+# nginx-noble / nginx-resolute: clean install.
+# nginx-takeover: Ubuntu's nginx is installed first (prepare) and replaced by nginx.org.
+dependency:
+  name: galaxy
+  enabled: false
+driver:
+  name: podman
+platforms:
+  - name: nginx-noble
+    image: docker.io/library/ubuntu:24.04
+    dockerfile: Dockerfile.j2
+    command: /lib/systemd/systemd
+    systemd: always
+  - name: nginx-resolute
+    image: docker.io/library/ubuntu:26.04
+    dockerfile: Dockerfile.j2
+    command: /lib/systemd/systemd
+    systemd: always
+  - name: nginx-takeover
+    image: docker.io/library/ubuntu:24.04
+    dockerfile: Dockerfile.j2
+    command: /lib/systemd/systemd
+    systemd: always
+provisioner:
+  name: ansible
+  inventory:
+    host_vars:
+      nginx-takeover:
+        nginx_allow_upgrade: true
+scenario:
+  test_sequence:
+    - destroy
+    - create
+    - prepare
+    - converge
+    - idempotence
+    - side_effect
+    - verify
+    - destroy
+verifier:
+  name: ansible

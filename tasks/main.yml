@@ -1,72 +1,105 @@
 ---
+- name: Add nginx.org repository
+  when: nginx_repo_enabled
+  tags: [nginx, nginx_install]
+  block:
+    - name: Create keyrings directory
+      ansible.builtin.file:
+        path: "{{ nginx_keyring | dirname }}"
+        state: directory
+        mode: "0755"
 
-# Include variable main setup.
-- name: Include variables.
-  ansible.builtin.include_vars: "vars/main.yml"
+    - name: Download nginx signing key
+      ansible.builtin.get_url:
+        url: "{{ nginx_signing_key_url }}"
+        dest: "{{ nginx_keyring }}"
+        mode: "0644"
 
-# Include variables based on the distribution
-- name: Include variables for {{ ansible_distribution }}
-  ansible.builtin.include_vars: "vars/{{ ansible_distribution }}.yml"
+    # Older setups used list files; keep exactly one source.
+    - name: Remove legacy list-style sources
+      ansible.builtin.file:
+        path: "/etc/apt/sources.list.d/{{ item }}"
+        state: absent
+      loop: [nginx.list, nginx.org.list]
 
-- name: Define ngx_packages.
-  ansible.builtin.set_fact:
-    ngx_packages: "{{ __ngx_packages | list }}"
-  when: nginx_packages is not defined
+    - name: Add nginx.org apt source
+      ansible.builtin.deb822_repository:
+        name: nginx
+        types: [deb]
+        uris: ["{{ nginx_repo_url }}"]
+        suites: ["{{ ansible_facts['distribution_release'] }}"]
+        components: [nginx]
+        signed_by: "{{ nginx_keyring }}"
+        install_python_debian: true
+      register: __nginx_repo
 
-- name: Define ngx_sites_available_create.
-  ansible.builtin.set_fact:
-    ngx_sites_available_create: "{{ __ngx_sites_available_create | bool }}"
-  when: ngx_sites_available_create is not defined
+    # Prefer nginx.org over the Ubuntu archive for the nginx package.
+    - name: Pin nginx.org packages
+      ansible.builtin.copy:
+        dest: /etc/apt/preferences.d/99nginx
+        content: |
+          # Managed by Ansible (pastir.nginx), do not edit.
+          Package: *
+          Pin: origin nginx.org
+          Pin-Priority: 900
+        owner: root
+        group: root
+        mode: "0644"
 
-- name: Define ngx_sites_available_path.
-  ansible.builtin.set_fact:
-    ngx_sites_available_path: "{{ __ngx_sites_available_path }}"
-  when: ngx_sites_available_path is not defined
+- name: Gather installed packages
+  ansible.builtin.package_facts:
+    manager: apt
+  tags: [nginx, nginx_install]
 
-- name: Define ngx_sites_enabled_create.
-  ansible.builtin.set_fact:
-    ngx_sites_enabled_create: "{{ __ngx_sites_enabled_create | bool }}"
-  when: ngx_sites_enabled_create is not defined
+- name: Refuse implicit nginx change
+  ansible.builtin.assert:
+    that:
+      - nginx_allow_upgrade or ansible_facts.packages['nginx'][0].version is match((nginx_version | regex_escape) ~ '-')
+      - nginx_allow_upgrade or (__nginx_ubuntu_packages | select('in', ansible_facts.packages) | list | length == 0)
+    fail_msg: >-
+      nginx {{ ansible_facts.packages['nginx'][0].version }} is installed
+      ({{ 'Ubuntu build' if __nginx_ubuntu_packages | select('in', ansible_facts.packages) | list else 'nginx.org build' }}),
+      {{ nginx_version }} from nginx.org is required. Re-run with -e nginx_allow_upgrade=true
+      (nginx is restarted; config in /etc/nginx is kept).
+    quiet: true
+  when:
+    - nginx_version | length > 0
+    - "'nginx' in ansible_facts.packages"
+  tags: [nginx, nginx_install]
 
-- name: Define ngx_sites_enabled_path.
-  ansible.builtin.set_fact:
-    ngx_sites_enabled_path: "{{ __ngx_sites_enabled_path }}"
-  when: ngx_sites_enabled_path is not defined
+- name: Install nginx
+  ansible.builtin.apt:
+    name: "{{ ['nginx' ~ (('=' ~ __nginx_pkg_version) if nginx_version else '')] + nginx_extra_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: "{{ 0 if (__nginx_repo is defined and __nginx_repo is changed) else 3600 }}"
+    allow_change_held_packages: true
+    allow_downgrade: "{{ nginx_allow_upgrade }}"
+  tags: [nginx, nginx_install]
 
-- name: Define ngx_dependencies_packages.
-  ansible.builtin.set_fact:
-    ngx_dependencies_packages: "{{ __ngx_dependencies_packages }}"
-  when: ngx_dependencies_packages is not defined
+- name: Hold nginx
+  ansible.builtin.dpkg_selections:
+    name: nginx
+    selection: hold
+  when: nginx_hold and not ansible_check_mode
+  tags: [nginx, nginx_install]
 
-- name: Define ngx_signing_key_pgp.
-  ansible.builtin.set_fact:
-    ngx_signing_key_pgp: "{{ __ngx_signing_key_pgp }}"
-  when: ngx_signing_key_pgp is not defined
+- name: Create vhost directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - "{{ nginx_sites_available_dir }}"
+    - "{{ nginx_sites_enabled_dir }}"
+  when: nginx_sites_dirs
+  tags: [nginx, nginx_install]
 
-- name: Define ngx_signing_key_rsa_pub.
-  ansible.builtin.set_fact:
-    ngx_signing_key_rsa_pub: "{{ __ngx_signing_key_rsa_pub }}"
-  when: ngx_signing_key_rsa_pub is not defined
-
-- name: Define ngx_repository.
-  ansible.builtin.set_fact:
-    ngx_repository: "{{ __ngx_repository }}"
-  when: ngx_repository is not defined
-
-- name: Define ngx_keyrings.
-  ansible.builtin.set_fact:
-    ngx_keyrings: "{{ __ngx_keyrings }}"
-  when: ngx_keyrings is not defined
-
-# Include tasks based on the distribution
-- name: Install nginx for {{ ansible_distribution }}
-  ansible.builtin.include_tasks: "install/{{ ansible_distribution }}.yml"
-  tags: install
-
-# Create directory sites_available && sites_enabled
-- name: Create directory sites_available && sites_enabled
-  ansible.builtin.include_tasks: "postinstall.yml"
-  tags: install
-
-- name: Ensure NGINX is running
-  ansible.builtin.meta: flush_handlers
+- name: Enable and start nginx
+  ansible.builtin.systemd_service:
+    name: nginx
+    enabled: "{{ nginx_service_enabled }}"
+    state: started
+  tags: [nginx, nginx_install]

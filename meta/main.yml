@@ -1,23 +1,18 @@
+---
 galaxy_info:
   author: Pastir Ivan
-  description: Install web server nginx
   role_name: nginx
-
-  license: Apache License, Version 2.0
-
-  min_ansible_version: '2.9'
-
+  namespace: pastir
+  description: Install nginx from the official nginx.org repository with a pinned, held version
+  license: Apache-2.0
+  min_ansible_version: "2.16"
   platforms:
     - name: Ubuntu
       versions:
-        - xenial
-        - bionic
-        - focal
-        - jammy
-
+        - noble
+        - resolute
   galaxy_tags:
     - nginx
-    - opensource
     - web
     - server
 dependencies: []

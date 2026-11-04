@@ -1,0 +1,20 @@
+---
+- name: A version change without nginx_allow_upgrade is refused
+  hosts: nginx-noble
+  become: true
+  tasks:
+    - name: Request another version
+      block:
+        - name: Run the role with another version
+          ansible.builtin.include_role:
+            name: pastir.nginx
+          vars:
+            nginx_version: "1.30.5"
+
+        - name: Must not get here
+          ansible.builtin.fail:
+            msg: version guard did not stop the role
+      rescue:
+        - name: The guard stopped the role
+          ansible.builtin.assert:
+            that: "'nginx_allow_upgrade' in ansible_failed_result.msg"

@@ -1,0 +1,9 @@
+---
+- name: Ubuntu nginx on the takeover host
+  hosts: nginx-takeover
+  become: true
+  tasks:
+    - name: Install nginx from the Ubuntu archive
+      ansible.builtin.apt:
+        name: nginx
+        update_cache: true

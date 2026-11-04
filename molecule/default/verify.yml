@@ -1,0 +1,32 @@
+---
+- name: Verify
+  hosts: all
+  become: true
+  tasks:
+    - name: Read installed nginx packages
+      ansible.builtin.package_facts:
+        manager: apt
+
+    - name: Nginx.org 1.30.6 installed and Ubuntu packages gone
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.packages['nginx'][0].version is match('1\.30\.6-')
+          - "'nginx-common' not in ansible_facts.packages"
+
+    - name: Package is held
+      ansible.builtin.command: apt-mark showhold
+      register: __hold
+      changed_when: false
+      failed_when: "'nginx' not in __hold.stdout_lines"
+
+    - name: Service is active
+      ansible.builtin.systemd_service:
+        name: nginx
+      register: __svc
+      failed_when: __svc.status.ActiveState != 'active'
+
+    - name: Vhost directories exist
+      ansible.builtin.stat:
+        path: /etc/nginx/sites-enabled
+      register: __dir
+      failed_when: not __dir.stat.isdir

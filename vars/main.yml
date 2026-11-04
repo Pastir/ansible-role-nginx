@@ -1,14 +1,9 @@
 ---
-# Default NGINX signing key
-__ngx_signing_key_pgp: https://nginx.org/keys/nginx_signing.key
-__ngx_signing_key_rsa_pub: https://nginx.org/keys/nginx_signing.rsa.pub
-__ngx_keyrings: /usr/share/keyrings/nginx-archive-keyring.gpg
-
-# sites_available
-__ngx_nginx_conf: /etc/nginx
-__ngx_sites_available_create: true
-__ngx_sites_available_path: /etc/nginx/sites-available
-
-# sites_enabled
-__ngx_sites_enabled_create: true
-__ngx_sites_enabled_path: /etc/nginx/sites-enabled
+__nginx_pkg_version: "{{ nginx_version ~ '-*~' ~ ansible_facts['distribution_release'] }}"
+# Ubuntu's own nginx packages conflict with the nginx.org package.
+__nginx_ubuntu_packages:
+  - nginx-common
+  - nginx-core
+  - nginx-full
+  - nginx-light
+  - nginx-extras

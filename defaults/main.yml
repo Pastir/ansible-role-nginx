@@ -1,0 +1,26 @@
+---
+# Installs nginx from the official nginx.org repository.
+# Configuration is handled by pastir.nginx_config.
+
+# Exact version to install and hold, e.g. "1.30.6". Empty -> latest of the branch.
+nginx_version: "1.30.6"
+# nginx.org branch: stable | mainline
+nginx_branch: stable
+nginx_hold: true
+# Allow changing an installed nginx (other version, or Ubuntu's nginx -> nginx.org).
+nginx_allow_upgrade: false
+
+nginx_repo_enabled: true
+nginx_repo_url: "https://nginx.org/packages{{ '/mainline' if nginx_branch == 'mainline' else '' }}/ubuntu"
+nginx_signing_key_url: https://nginx.org/keys/nginx_signing.key
+nginx_keyring: /etc/apt/keyrings/nginx.asc
+
+# Extra packages from the same repository (e.g. nginx-module-geoip).
+nginx_extra_packages: []
+
+# Debian-style vhost directories (nginx.org packages only have conf.d).
+nginx_sites_dirs: true
+nginx_sites_available_dir: /etc/nginx/sites-available
+nginx_sites_enabled_dir: /etc/nginx/sites-enabled
+
+nginx_service_enabled: true
