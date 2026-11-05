@@ -30,3 +30,26 @@
         path: /etc/nginx/sites-enabled
       register: __dir
       failed_when: not __dir.stat.isdir
+
+    - name: Configuration is valid
+      ansible.builtin.command: nginx -t
+      changed_when: false
+
+    - name: Check the package default.conf
+      ansible.builtin.stat:
+        path: /etc/nginx/conf.d/default.conf
+      register: __default_conf
+
+    - name: Default.conf removed only where requested
+      ansible.builtin.assert:
+        that: __default_conf.stat.exists != (nginx_remove_package_default_conf | default(false))
+
+    - name: Read listening sockets
+      ansible.builtin.command: ss -Hltn
+      register: __ss
+      changed_when: false
+
+    - name: Running nginx has no default server on :80 where default.conf was removed
+      ansible.builtin.assert:
+        that: __ss.stdout is not search(':80\s')
+      when: nginx_remove_package_default_conf | default(false)

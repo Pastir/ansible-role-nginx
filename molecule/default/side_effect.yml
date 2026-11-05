@@ -18,3 +18,27 @@
         - name: The guard stopped the role
           ansible.builtin.assert:
             that: "'nginx_allow_upgrade' in ansible_failed_result.msg"
+
+- name: A modified default.conf is kept
+  hosts: nginx-noble
+  become: true
+  tasks:
+    - name: Modify default.conf
+      ansible.builtin.lineinfile:
+        path: /etc/nginx/conf.d/default.conf
+        line: "# local change"
+
+    - name: Run the role with the removal enabled
+      ansible.builtin.include_role:
+        name: pastir.nginx
+      vars:
+        nginx_remove_package_default_conf: true
+
+    - name: Check default.conf
+      ansible.builtin.stat:
+        path: /etc/nginx/conf.d/default.conf
+      register: __conf
+
+    - name: Modified default.conf is still there
+      ansible.builtin.assert:
+        that: __conf.stat.exists

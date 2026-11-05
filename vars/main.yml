@@ -7,3 +7,10 @@ __nginx_ubuntu_packages:
   - nginx-full
   - nginx-light
   - nginx-extras
+# Shipped by the nginx.org package; removed when nginx_remove_package_default_conf is true.
+__nginx_package_default_conf: /etc/nginx/conf.d/default.conf
+# md5 of the package's copy, from `dpkg-query -W -f='${Conffiles}' nginx` ('' if unknown).
+__nginx_default_conf_pkg_md5: >-
+  {{ (__nginx_conffiles.stdout | default('')
+      | regex_search('^\s*' ~ (__nginx_package_default_conf | regex_escape) ~ '\s+([0-9a-f]{32})', '\1', multiline=True)
+      | default([''], true)) | first }}

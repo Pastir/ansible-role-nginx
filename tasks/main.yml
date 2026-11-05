@@ -77,6 +77,44 @@
     allow_downgrade: "{{ nginx_allow_upgrade }}"
   tags: [nginx, nginx_install]
 
+# The nginx.org package ships conf.d/default.conf, which becomes the default server on :80
+# until pastir.nginx_config removes it. Drop it right after the install, before nginx is
+# started, but only while it is the package's untouched copy (md5 matches dpkg's conffile record).
+- name: Remove the package default.conf
+  when: nginx_remove_package_default_conf
+  tags: [nginx, nginx_install]
+  block:
+    - name: Read nginx conffile checksums
+      ansible.builtin.command: dpkg-query -W -f=${Conffiles} nginx
+      register: __nginx_conffiles
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: Check default.conf
+      ansible.builtin.stat:
+        path: "{{ __nginx_package_default_conf }}"
+        checksum_algorithm: md5
+      register: __nginx_default_conf
+
+    - name: Delete unmodified default.conf
+      ansible.builtin.file:
+        path: "{{ __nginx_package_default_conf }}"
+        state: absent
+      register: __nginx_default_conf_removed
+      when:
+        - __nginx_default_conf.stat.exists
+        - __nginx_default_conf.stat.checksum == __nginx_default_conf_pkg_md5
+
+    - name: Warn about a modified default.conf
+      ansible.builtin.debug:
+        msg: >-
+          [WARNING] {{ __nginx_package_default_conf }} differs from the nginx package's copy
+          (or is not a package conffile) and was left in place.
+      when:
+        - __nginx_default_conf.stat.exists
+        - __nginx_default_conf.stat.checksum != __nginx_default_conf_pkg_md5
+
 - name: Hold nginx
   ansible.builtin.dpkg_selections:
     name: nginx
@@ -102,4 +140,17 @@
     name: nginx
     enabled: "{{ nginx_service_enabled }}"
     state: started
+  register: __nginx_started
+  tags: [nginx, nginx_install]
+
+# The package's postinst may already have started nginx with default.conf loaded
+# (e.g. when replacing a running nginx); apply its removal then.
+- name: Reload nginx after removing default.conf
+  ansible.builtin.systemd_service:
+    name: nginx
+    state: reloaded
+  when:
+    - __nginx_default_conf_removed is defined
+    - __nginx_default_conf_removed is changed
+    - __nginx_started is not changed
   tags: [nginx, nginx_install]

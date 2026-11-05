@@ -1,6 +1,7 @@
 ---
 # nginx-noble / nginx-resolute: clean install.
 # nginx-takeover: Ubuntu's nginx is installed first (prepare) and replaced by nginx.org.
+# nginx_remove_package_default_conf: on for resolute/takeover, default (off) on noble.
 dependency:
   name: galaxy
   enabled: false
@@ -26,8 +27,11 @@ provisioner:
   name: ansible
   inventory:
     host_vars:
+      nginx-resolute:
+        nginx_remove_package_default_conf: true
       nginx-takeover:
         nginx_allow_upgrade: true
+        nginx_remove_package_default_conf: true
 scenario:
   test_sequence:
     - destroy
